@@ -194,13 +194,13 @@ export default function AdminSchoolsPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {school.cnpj}
+                            {school.group_cnpj || school.cnpj || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center gap-1">
                               <Users size={16} className="text-purple-600" />
                               <span className="font-semibold text-gray-900">
-                                {school.total_students || 0}
+                                {school.students_count || school.total_students || 0}
                               </span>
                             </div>
                           </td>
@@ -208,7 +208,7 @@ export default function AdminSchoolsPage() {
                             <div className="flex items-center justify-center gap-1">
                               <GraduationCap size={16} className="text-green-600" />
                               <span className="font-semibold text-gray-900">
-                                {school.total_teachers || 0}
+                                {school.teachers_count || school.total_teachers || 0}
                               </span>
                             </div>
                           </td>

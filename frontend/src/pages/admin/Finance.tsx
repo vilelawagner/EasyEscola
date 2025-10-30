@@ -67,17 +67,19 @@ export default function AdminFinanceDashboard() {
                   <p className="text-sm text-gray-600">Total a Receber</p>
                   <DollarSign className="text-blue-600" size={24} />
                 </div>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-2xl md:text-3xl font-bold text-gray-900 break-words">
                   R$ {totalReceivable.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                <div className="mt-3 space-y-1">
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                     <div 
                       className="bg-blue-600 h-2 rounded-full transition-all"
                       style={{ width: `${receivedPercentage}%` }}
                     ></div>
                   </div>
-                  <span className="text-xs text-gray-600">{receivedPercentage}%</span>
+                  <div className="flex items-center justify-end">
+                    <span className="text-xs text-gray-600 font-medium">{receivedPercentage}%</span>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -90,7 +92,7 @@ export default function AdminFinanceDashboard() {
                   <p className="text-sm text-gray-600">Recebido</p>
                   <CheckCircle className="text-green-600" size={24} />
                 </div>
-                <p className="text-3xl font-bold text-green-600">
+                <p className="text-2xl md:text-3xl font-bold text-green-600 break-words">
                   R$ {totalReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-sm text-gray-500 mt-2">
@@ -107,7 +109,7 @@ export default function AdminFinanceDashboard() {
                   <p className="text-sm text-gray-600">Pendente</p>
                   <Clock className="text-yellow-600" size={24} />
                 </div>
-                <p className="text-3xl font-bold text-yellow-600">
+                <p className="text-2xl md:text-3xl font-bold text-yellow-600 break-words">
                   R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-sm text-gray-500 mt-2">
@@ -124,7 +126,7 @@ export default function AdminFinanceDashboard() {
                   <p className="text-sm text-gray-600">Vencido</p>
                   <AlertTriangle className="text-red-600" size={24} />
                 </div>
-                <p className="text-3xl font-bold text-red-600">
+                <p className="text-2xl md:text-3xl font-bold text-red-600 break-words">
                   R$ {totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-sm text-gray-500 mt-2">

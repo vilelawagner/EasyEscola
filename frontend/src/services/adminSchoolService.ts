@@ -3,6 +3,9 @@ import { School } from '../types';
 
 export interface SchoolWithGroup extends School {
   group_name?: string;
+  group_cnpj?: string;
+  students_count?: number;
+  teachers_count?: number;
   total_students?: number;
   total_teachers?: number;
 }

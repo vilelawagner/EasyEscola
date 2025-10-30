@@ -154,13 +154,34 @@ export const listAllSchools = async (req: AuthRequest, res: Response): Promise<v
 
   // Paginação com join
   const schools = await query
-    .select('schools.*', 'groups.name as group_name')
+    .select('schools.*', 'groups.name as group_name', 'groups.doc_cnpj as group_cnpj')
     .leftJoin('groups', 'schools.group_id', 'groups.id')
     .orderBy(`schools.${sortBy || 'id'}`, sortOrder || 'desc')
     .limit(limit)
     .offset(getOffset(page, limit));
 
-  res.json(createPaginatedResponse(schools, total as number, page, limit));
+  // Para cada escola, buscar total de alunos e professores
+  const schoolsWithCounts = await Promise.all(
+    schools.map(async (school) => {
+      const [{ students_count }] = await db('students')
+        .where('school_id', school.id)
+        .andWhere('status', 'active')
+        .count('* as students_count');
+      
+      const [{ teachers_count }] = await db('teachers')
+        .where('school_id', school.id)
+        .andWhere('status', 'active')
+        .count('* as teachers_count');
+      
+      return {
+        ...school,
+        students_count: students_count || 0,
+        teachers_count: teachers_count || 0,
+      };
+    })
+  );
+
+  res.json(createPaginatedResponse(schoolsWithCounts, total as number, page, limit));
 };
 
 export const updateSchoolStatus = async (req: AuthRequest, res: Response): Promise<void> => {
