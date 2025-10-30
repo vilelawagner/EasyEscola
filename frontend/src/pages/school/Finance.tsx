@@ -6,6 +6,7 @@ import {
   type Defaulter,
 } from '../../services/schoolFinanceService';
 import { studentService } from '../../services/studentService';
+import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import {
   Card,
   CardContent,
@@ -160,20 +161,21 @@ const Finance = () => {
     : '0';
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Financeiro</h1>
-          <p className="text-gray-500">Gerenciamento de pagamentos dos alunos</p>
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Financeiro</h1>
+            <p className="text-gray-500">Gerenciamento de pagamentos dos alunos</p>
+          </div>
+          <button
+            onClick={() => setShowGenerateModal(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Gerar Boleto
+          </button>
         </div>
-        <button
-          onClick={() => setShowGenerateModal(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          Gerar Boleto
-        </button>
-      </div>
 
       {/* Filtro de Mês */}
       <div className="flex gap-4 items-center">
@@ -619,7 +621,8 @@ const Finance = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
