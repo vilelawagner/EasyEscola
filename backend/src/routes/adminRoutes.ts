@@ -33,4 +33,12 @@ router.post('/impersonate', auditLog('impersonate'), AdminController.impersonate
 // ==================== DASHBOARD ====================
 router.get('/dashboard', AdminController.getDashboard);
 
+// ==================== USERS ====================
+router.get('/users', AdminController.listUsers);
+router.post('/users', auditLog('create_user'), AdminController.createUser);
+router.get('/users/:id', AdminController.getUser);
+router.put('/users/:id', auditLog('update_user'), AdminController.updateUser);
+router.delete('/users/:id', auditLog('delete_user'), AdminController.deleteUser);
+router.post('/change-password', auditLog('change_password'), AdminController.changePassword);
+
 export default router;

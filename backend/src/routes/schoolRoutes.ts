@@ -60,4 +60,10 @@ router.get('/finance/defaulters', SchoolController.listDefaulters);
 router.post('/finance/boleto', auditLog('generate_boleto'), SchoolController.generateBoleto);
 router.put('/finance/payments/:id/paid', auditLog('mark_payment_paid'), SchoolController.markPaymentAsPaid);
 
+// ==================== USERS ====================
+router.get('/users', SchoolController.listSchoolUsers);
+router.post('/users', auditLog('create_user'), SchoolController.createSchoolUser);
+router.put('/users/:id', auditLog('update_user'), SchoolController.updateSchoolUser);
+router.delete('/users/:id', auditLog('delete_user'), SchoolController.deleteSchoolUser);
+
 export default router;

@@ -24,4 +24,10 @@ router.get('/payments/summary', GroupController.getPaymentsSummary);
 // ==================== DASHBOARD ====================
 router.get('/dashboard', GroupController.getDashboard);
 
+// ==================== USERS ====================
+router.get('/users', GroupController.listGroupUsers);
+router.post('/users', auditLog('create_user'), GroupController.createGroupUser);
+router.put('/users/:id', auditLog('update_user'), GroupController.updateGroupUser);
+router.delete('/users/:id', auditLog('delete_user'), GroupController.deleteGroupUser);
+
 export default router;

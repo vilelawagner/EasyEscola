@@ -215,3 +215,39 @@ export const me = async (req: AuthRequest, res: Response): Promise<void> => {
     ...additionalData,
   });
 };
+
+/**
+ * Alterar senha do usuário autenticado
+ */
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw new AppError('Campos obrigatórios: currentPassword, newPassword', 400);
+  }
+
+  if (newPassword.length < 6) {
+    throw new AppError('A nova senha deve ter no mínimo 6 caracteres', 400);
+  }
+
+  const user = await db('users').where('id', req.user.userId).first();
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  const bcrypt = require('bcryptjs');
+  const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+  if (!isValidPassword) {
+    throw new AppError('Senha atual incorreta', 401);
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await db('users')
+    .where('id', req.user.userId)
+    .update({
+      password: hashedPassword,
+      updated_at: db.fn.now(),
+    });
+
+  res.json({ message: 'Senha alterada com sucesso' });
+};

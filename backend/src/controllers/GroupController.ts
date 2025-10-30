@@ -333,3 +333,156 @@ export const getDashboard = async (req: AuthRequest, res: Response): Promise<voi
     upcoming_payments: [], // Mantido para compatibilidade
   });
 };
+
+// ==================== USERS ====================
+
+export const listGroupUsers = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
+  const { role, status, schoolId, search } = req.query;
+  const filters = getTenantFilters(req);
+
+  let query = db('users').where('users.group_id', filters.groupId!);
+
+  // Gestor vê: outros gestores do grupo + secretárias das escolas do grupo
+  if (role) query = query.where('role', role as string);
+  if (status) query = query.where('users.status', status as string);
+  if (schoolId) query = query.where('school_id', schoolId as string);
+  if (search) {
+    query = query.where((builder) => {
+      builder
+        .where('users.name', 'like', `%${search}%`)
+        .orWhere('users.email', 'like', `%${search}%`);
+    });
+  }
+
+  const [{ total }] = await query.clone().count('* as total');
+
+  const users = await query
+    .select(
+      'users.id',
+      'users.name',
+      'users.email',
+      'users.role',
+      'users.group_id',
+      'users.school_id',
+      'users.status',
+      'users.created_at',
+      'users.updated_at',
+      'schools.name as school_name'
+    )
+    .leftJoin('schools', 'users.school_id', 'schools.id')
+    .orderBy(`users.${sortBy || 'id'}`, sortOrder || 'desc')
+    .limit(limit)
+    .offset(getOffset(page, limit));
+
+  res.json(createPaginatedResponse(users, Number(total), page, limit));
+};
+
+export const createGroupUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { name, email, password, role, schoolId } = req.body;
+  const filters = getTenantFilters(req);
+
+  if (!name || !email || !password || !role) {
+    throw new AppError('Campos obrigatórios: name, email, password, role', 400);
+  }
+
+  // Gestor só pode criar GROUP_MANAGER e SCHOOL_SECRETARY
+  if (role !== 'ROLE_GROUP_MANAGER' && role !== 'ROLE_SCHOOL_SECRETARY') {
+    throw new AppError('Você só pode criar gestores ou secretárias', 403);
+  }
+
+  // Se for secretária, precisa de schoolId
+  if (role === 'ROLE_SCHOOL_SECRETARY' && !schoolId) {
+    throw new AppError('Secretária precisa estar vinculada a uma escola', 400);
+  }
+
+  // Verifica se email já existe
+  const existingUser = await db('users').where('email', email).first();
+  if (existingUser) {
+    throw new AppError('Email já está em uso', 400);
+  }
+
+  const bcrypt = require('bcryptjs');
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const [id] = await db('users').insert({
+    name,
+    email,
+    password: hashedPassword,
+    role,
+    group_id: filters.groupId,
+    school_id: role === 'ROLE_SCHOOL_SECRETARY' ? schoolId : null,
+    status: 'active',
+  });
+
+  const newUser = await db('users')
+    .select('id', 'name', 'email', 'role', 'group_id', 'school_id', 'status', 'created_at')
+    .where('id', id)
+    .first();
+
+  res.status(201).json(newUser);
+};
+
+export const updateGroupUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { id } = req.params;
+  const { name, email, role, schoolId, status } = req.body;
+  const filters = getTenantFilters(req);
+
+  const user = await db('users')
+    .where('id', id)
+    .andWhere('group_id', filters.groupId!)
+    .first();
+
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  // Se mudou email, verifica se não está em uso
+  if (email && email !== user.email) {
+    const existingUser = await db('users').where('email', email).first();
+    if (existingUser) {
+      throw new AppError('Email já está em uso', 400);
+    }
+  }
+
+  const updateData: any = { updated_at: db.fn.now() };
+  if (name) updateData.name = name;
+  if (email) updateData.email = email;
+  if (role) updateData.role = role;
+  if (schoolId !== undefined) updateData.school_id = schoolId;
+  if (status) updateData.status = status;
+
+  await db('users').where('id', id).update(updateData);
+
+  const updatedUser = await db('users')
+    .select('id', 'name', 'email', 'role', 'group_id', 'school_id', 'status', 'updated_at')
+    .where('id', id)
+    .first();
+
+  res.json(updatedUser);
+};
+
+export const deleteGroupUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { id } = req.params;
+  const filters = getTenantFilters(req);
+
+  const user = await db('users')
+    .where('id', id)
+    .andWhere('group_id', filters.groupId!)
+    .first();
+
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  if (req.user.userId === parseInt(id)) {
+    throw new AppError('Você não pode deletar sua própria conta', 400);
+  }
+
+  await db('users').where('id', id).delete();
+  res.json({ message: 'Usuário removido com sucesso' });
+};

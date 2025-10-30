@@ -32,4 +32,11 @@ router.post('/logout', authenticateToken, AuthController.logout);
  */
 router.get('/me', authenticateToken, AuthController.me);
 
+/**
+ * @route   POST /api/v1/auth/change-password
+ * @desc    Alterar senha do usuário autenticado
+ * @access  Private
+ */
+router.post('/change-password', authenticateToken, AuthController.changePassword);
+
 export default router;

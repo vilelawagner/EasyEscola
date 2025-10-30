@@ -403,3 +403,181 @@ export const getDashboard = async (_req: AuthRequest, res: Response): Promise<vo
     recent_schools,
   });
 };
+
+// ==================== USERS ====================
+
+export const listUsers = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
+  const { role, status, groupId, schoolId, search } = req.query;
+
+  let query = db('users');
+
+  if (role) query = query.where('role', role as string);
+  if (status) query = query.where('status', status as string);
+  if (groupId) query = query.where('group_id', groupId as string);
+  if (schoolId) query = query.where('school_id', schoolId as string);
+  if (search) {
+    query = query.where((builder) => {
+      builder
+        .where('name', 'like', `%${search}%`)
+        .orWhere('email', 'like', `%${search}%`);
+    });
+  }
+
+  const [{ total }] = await query.clone().count('* as total');
+
+  const users = await query
+    .select(
+      'users.*',
+      'groups.name as group_name',
+      'schools.name as school_name'
+    )
+    .leftJoin('groups', 'users.group_id', 'groups.id')
+    .leftJoin('schools', 'users.school_id', 'schools.id')
+    .orderBy(`users.${sortBy || 'id'}`, sortOrder || 'desc')
+    .limit(limit)
+    .offset(getOffset(page, limit));
+
+  // Remove password dos resultados
+  const usersWithoutPassword = users.map(({ password, ...user }) => user);
+
+  res.json(createPaginatedResponse(usersWithoutPassword, Number(total), page, limit));
+};
+
+export const getUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  const user = await db('users')
+    .select(
+      'users.*',
+      'groups.name as group_name',
+      'schools.name as school_name'
+    )
+    .leftJoin('groups', 'users.group_id', 'groups.id')
+    .leftJoin('schools', 'users.school_id', 'schools.id')
+    .where('users.id', id)
+    .first();
+
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  const { password, ...userWithoutPassword } = user;
+  res.json(userWithoutPassword);
+};
+
+export const createUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { name, email, password, role, groupId, schoolId, status } = req.body;
+
+  if (!name || !email || !password || !role) {
+    throw new AppError('Campos obrigatórios: name, email, password, role', 400);
+  }
+
+  // Verifica se email já existe
+  const existingUser = await db('users').where('email', email).first();
+  if (existingUser) {
+    throw new AppError('Email já está em uso', 400);
+  }
+
+  const bcrypt = require('bcryptjs');
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const [id] = await db('users').insert({
+    name,
+    email,
+    password: hashedPassword,
+    role,
+    group_id: groupId || null,
+    school_id: schoolId || null,
+    status: status || 'active',
+  });
+
+  const newUser = await db('users')
+    .select('id', 'name', 'email', 'role', 'group_id', 'school_id', 'status', 'created_at')
+    .where('id', id)
+    .first();
+
+  res.status(201).json(newUser);
+};
+
+export const updateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { name, email, role, groupId, schoolId, status } = req.body;
+
+  const user = await db('users').where('id', id).first();
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  // Se mudou email, verifica se não está em uso
+  if (email && email !== user.email) {
+    const existingUser = await db('users').where('email', email).first();
+    if (existingUser) {
+      throw new AppError('Email já está em uso', 400);
+    }
+  }
+
+  const updateData: any = {
+    updated_at: db.fn.now(),
+  };
+
+  if (name) updateData.name = name;
+  if (email) updateData.email = email;
+  if (role) updateData.role = role;
+  if (groupId !== undefined) updateData.group_id = groupId;
+  if (schoolId !== undefined) updateData.school_id = schoolId;
+  if (status) updateData.status = status;
+
+  await db('users').where('id', id).update(updateData);
+
+  const updatedUser = await db('users')
+    .select('id', 'name', 'email', 'role', 'group_id', 'school_id', 'status', 'updated_at')
+    .where('id', id)
+    .first();
+
+  res.json(updatedUser);
+};
+
+export const deleteUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  const user = await db('users').where('id', id).first();
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  // Não permite deletar o próprio usuário
+  if (req.user && req.user.userId === parseInt(id)) {
+    throw new AppError('Você não pode deletar sua própria conta', 400);
+  }
+
+  await db('users').where('id', id).delete();
+  res.json({ message: 'Usuário removido com sucesso' });
+};
+
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw new AppError('Campos obrigatórios: currentPassword, newPassword', 400);
+  }
+
+  if (newPassword.length < 6) {
+    throw new AppError('A nova senha deve ter no mínimo 6 caracteres', 400);
+  }
+
+  const user = await db('users').where('id', req.user.userId).first();
+  if (!user) throw new AppError('Usuário não encontrado', 404);
+
+  const bcrypt = require('bcryptjs');
+  const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+  if (!isValidPassword) {
+    throw new AppError('Senha atual incorreta', 401);
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await db('users')
+    .where('id', req.user.userId)
+    .update({
+      password: hashedPassword,
+      updated_at: db.fn.now(),
+    });
+
+  res.json({ message: 'Senha alterada com sucesso' });
+};
