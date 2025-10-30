@@ -1,0 +1,30 @@
+{
+  "name": "easy-escola-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Easy Escola - Plataforma Educacional Multi-tenant (frontend + backend)",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently -n api,web -c blue,green \"npm -w backend run dev\" \"npm -w frontend run dev\"",
+    "dev:backend": "npm -w backend run dev",
+    "dev:frontend": "npm -w frontend run dev",
+    "build": "npm -w backend run build && npm -w frontend run build",
+    "build:backend": "npm -w backend run build",
+    "build:frontend": "npm -w frontend run build",
+    "migrate:make": "npm -w backend run migrate:make",
+    "migrate:latest": "npm -w backend run migrate:latest",
+    "migrate:rollback": "npm -w backend run migrate:rollback",
+    "seed:make": "npm -w backend run seed:make",
+    "seed:run": "npm -w backend run seed:run",
+    "lint": "npm -w backend run lint && npm -w frontend run lint",
+    "test": "npm -w backend run test && npm -w frontend run test",
+    "start": "concurrently -n api,web -c blue,green \"npm -w backend run start\" \"npm -w frontend run preview\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}

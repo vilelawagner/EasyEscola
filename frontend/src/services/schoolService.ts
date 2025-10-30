@@ -1,0 +1,63 @@
+import api from '../lib/api';
+import { School } from '../types';
+
+export interface ListSchoolsParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: 'active' | 'inactive';
+}
+
+export interface ListSchoolsResponse {
+  data: School[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface CreateSchoolData {
+  name: string;
+  cnpj: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  status: 'active' | 'inactive';
+}
+
+export interface UpdateSchoolData {
+  name?: string;
+  cnpj?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  status?: 'active' | 'inactive';
+}
+
+export const schoolService = {
+  list: async (params: ListSchoolsParams = {}): Promise<ListSchoolsResponse> => {
+    const { data } = await api.get('/group/schools', { params });
+    return data;
+  },
+
+  getById: async (id: number): Promise<School> => {
+    const { data } = await api.get(`/group/schools/${id}`);
+    return data;
+  },
+
+  create: async (schoolData: CreateSchoolData): Promise<School> => {
+    const { data } = await api.post('/group/schools', schoolData);
+    return data;
+  },
+
+  update: async (id: number, schoolData: UpdateSchoolData): Promise<School> => {
+    const { data } = await api.put(`/group/schools/${id}`, schoolData);
+    return data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/group/schools/${id}`);
+  },
+};

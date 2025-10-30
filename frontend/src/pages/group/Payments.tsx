@@ -1,0 +1,516 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { Pagination } from '@/components/ui/Pagination';
+import { Modal } from '@/components/ui/Modal';
+import { paymentService, CreatePaymentData, PaymentWithDetails } from '@/services/paymentService';
+import { Payment } from '@/types';
+import { Plus, CheckCircle, XCircle, AlertCircle, DollarSign } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import toast from 'react-hot-toast';
+
+export default function GroupPaymentsPage() {
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'paid' | 'overdue' | 'cancelled' | ''>('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentWithDetails | null>(null);
+
+  const { data: paymentsData, isLoading } = useQuery({
+    queryKey: ['group-payments', page, search, statusFilter],
+    queryFn: () => paymentService.list({
+      page,
+      limit: 10,
+      search,
+      status: statusFilter ? statusFilter : undefined,
+    }),
+  });
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreatePaymentData>();
+  const { register: registerPay, handleSubmit: handleSubmitPay, reset: resetPay } = useForm<{ payment_method: string }>();
+
+  const createMutation = useMutation({
+    mutationFn: paymentService.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['group-payments'] });
+      toast.success('Cobrança criada com sucesso!');
+      closeModal();
+    },
+    onError: () => {
+      toast.error('Erro ao criar cobrança');
+    },
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: ({ id, paymentMethod }: { id: number; paymentMethod: string }) =>
+      paymentService.markAsPaid(id, paymentMethod),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['group-payments'] });
+      toast.success('Pagamento confirmado com sucesso!');
+      closePayModal();
+    },
+    onError: () => {
+      toast.error('Erro ao confirmar pagamento');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: paymentService.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['group-payments'] });
+      toast.success('Cobrança cancelada com sucesso!');
+    },
+    onError: () => {
+      toast.error('Erro ao cancelar cobrança');
+    },
+  });
+
+  const openModal = () => {
+    reset({
+      student_id: 0,
+      reference_month: new Date().toISOString().slice(0, 7),
+      amount: 0,
+      due_date: '',
+      notes: '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    reset();
+  };
+
+  const openPayModal = (payment: Payment) => {
+    setSelectedPayment(payment);
+    resetPay({ payment_method: 'pix' });
+    setIsPayModalOpen(true);
+  };
+
+  const closePayModal = () => {
+    setIsPayModalOpen(false);
+    setSelectedPayment(null);
+    resetPay();
+  };
+
+  const onSubmit = (data: CreatePaymentData) => {
+    createMutation.mutate(data);
+  };
+
+  const onSubmitPay = (data: { payment_method: string }) => {
+    if (selectedPayment) {
+      markPaidMutation.mutate({
+        id: selectedPayment.id,
+        paymentMethod: data.payment_method,
+      });
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    if (window.confirm('Tem certeza que deseja cancelar esta cobrança?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return <CheckCircle className="text-green-600" size={20} />;
+      case 'overdue':
+        return <XCircle className="text-red-600" size={20} />;
+      case 'cancelled':
+        return <XCircle className="text-gray-600" size={20} />;
+      default:
+        return <AlertCircle className="text-yellow-600" size={20} />;
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'Pago';
+      case 'overdue':
+        return 'Vencido';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return 'Pendente';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'overdue':
+        return 'bg-red-100 text-red-800';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  const totalReceived = paymentsData?.data
+    .filter(p => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0) || 0;
+
+  const totalPending = paymentsData?.data
+    .filter(p => p.status === 'pending')
+    .reduce((sum, p) => sum + p.amount, 0) || 0;
+
+  const totalOverdue = paymentsData?.data
+    .filter(p => p.status === 'overdue')
+    .reduce((sum, p) => sum + p.amount, 0) || 0;
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Gestão de Pagamentos</h1>
+          <Button onClick={openModal}>
+            <Plus size={20} className="mr-2" />
+            Nova Cobrança
+          </Button>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardContent>
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <p className="text-sm text-gray-600">Total Recebido</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    R$ {totalReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <DollarSign className="text-green-600" size={32} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <p className="text-sm text-gray-600">Pendente</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <AlertCircle className="text-yellow-600" size={32} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <p className="text-sm text-gray-600">Vencido</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    R$ {totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <XCircle className="text-red-600" size={32} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+              <CardTitle>Lista de Pagamentos</CardTitle>
+              <div className="flex gap-3">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as '' | 'pending' | 'paid' | 'overdue' | 'cancelled')}
+                  className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="">Todos os status</option>
+                  <option value="pending">Pendente</option>
+                  <option value="paid">Pago</option>
+                  <option value="overdue">Vencido</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+                <SearchBar
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Buscar aluno..."
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Aluno
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Mês Ref.
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Valor
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Vencimento
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {paymentsData?.data.map((payment) => (
+                        <tr key={payment.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="font-medium text-gray-900">
+                              {payment.student_name || `Aluno #${payment.student_id}`}
+                            </div>
+                            {payment.school_name && (
+                              <div className="text-sm text-gray-500">{payment.school_name}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(payment.reference_month + '-01').toLocaleDateString('pt-BR', {
+                              month: 'long',
+                              year: 'numeric',
+                            })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="font-semibold text-gray-900">
+                              R$ {payment.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </div>
+                            {payment.payment_method && (
+                              <div className="text-xs text-gray-500">{payment.payment_method}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div>{new Date(payment.due_date).toLocaleDateString('pt-BR')}</div>
+                            {payment.paid_date && (
+                              <div className="text-xs text-green-600">
+                                Pago em {new Date(payment.paid_date).toLocaleDateString('pt-BR')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(payment.status)}
+                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(payment.status)}`}>
+                                {getStatusLabel(payment.status)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              {payment.status === 'pending' && (
+                                <Button
+                                  onClick={() => openPayModal(payment)}
+                                  variant="success"
+                                  size="sm"
+                                >
+                                  Confirmar
+                                </Button>
+                              )}
+                              {(payment.status === 'pending' || payment.status === 'overdue') && (
+                                <Button
+                                  onClick={() => handleDelete(payment.id)}
+                                  variant="danger"
+                                  size="sm"
+                                >
+                                  Cancelar
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {(!paymentsData?.data || paymentsData.data.length === 0) && (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500">Nenhum pagamento encontrado</p>
+                    </div>
+                  )}
+                </div>
+
+                {paymentsData && paymentsData.pagination.totalPages > 1 && (
+                  <Pagination
+                    currentPage={page}
+                    totalPages={paymentsData.pagination.totalPages}
+                    onPageChange={setPage}
+                  />
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Modal de Nova Cobrança */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title="Nova Cobrança"
+      >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              ID do Aluno *
+            </label>
+            <input
+              {...register('student_id', {
+                required: 'ID do aluno é obrigatório',
+                valueAsNumber: true,
+              })}
+              type="number"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Digite o ID do aluno"
+            />
+            {errors.student_id && (
+              <p className="mt-1 text-sm text-red-600">{errors.student_id.message}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mês de Referência *
+              </label>
+              <input
+                {...register('reference_month', { required: 'Mês é obrigatório' })}
+                type="month"
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+              {errors.reference_month && (
+                <p className="mt-1 text-sm text-red-600">{errors.reference_month.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Valor *
+              </label>
+              <input
+                {...register('amount', {
+                  required: 'Valor é obrigatório',
+                  valueAsNumber: true,
+                  min: { value: 0.01, message: 'Valor deve ser maior que zero' },
+                })}
+                type="number"
+                step="0.01"
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+              {errors.amount && (
+                <p className="mt-1 text-sm text-red-600">{errors.amount.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Data de Vencimento *
+            </label>
+            <input
+              {...register('due_date', { required: 'Data de vencimento é obrigatória' })}
+              type="date"
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            {errors.due_date && (
+              <p className="mt-1 text-sm text-red-600">{errors.due_date.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Observações
+            </label>
+            <textarea
+              {...register('notes')}
+              rows={3}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Observações sobre o pagamento..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="secondary" onClick={closeModal}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={createMutation.isPending}>
+              Criar Cobrança
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal de Confirmar Pagamento */}
+      <Modal
+        isOpen={isPayModalOpen}
+        onClose={closePayModal}
+        title="Confirmar Pagamento"
+      >
+        <form onSubmit={handleSubmitPay(onSubmitPay)} className="space-y-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Aluno:</strong> {selectedPayment?.student_name || `#${selectedPayment?.student_id}`}
+            </p>
+            <p className="text-sm text-gray-700 mt-1">
+              <strong>Valor:</strong> R$ {selectedPayment?.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-sm text-gray-700 mt-1">
+              <strong>Vencimento:</strong> {selectedPayment && new Date(selectedPayment.due_date).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Forma de Pagamento *
+            </label>
+            <select
+              {...registerPay('payment_method', { required: true })}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="pix">PIX</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="cartao_credito">Cartão de Crédito</option>
+              <option value="cartao_debito">Cartão de Débito</option>
+              <option value="boleto">Boleto</option>
+              <option value="transferencia">Transferência</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="secondary" onClick={closePayModal}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="success" disabled={markPaidMutation.isPending}>
+              Confirmar Pagamento
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </DashboardLayout>
+  );
+}
