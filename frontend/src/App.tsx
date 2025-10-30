@@ -8,6 +8,7 @@ import AdminSchoolsPage from './pages/admin/Schools'
 import AdminFinancePage from './pages/admin/Finance'
 import AdminBillingsPage from './pages/admin/FinanceBillings'
 import AdminFinanceConfigPage from './pages/admin/FinanceConfig'
+import AdminUsersPage from './pages/admin/Users'
 import GroupDashboard from './pages/group/Dashboard'
 import GroupSchoolsPage from './pages/group/Schools'
 import GroupPaymentsPage from './pages/group/Payments'
@@ -97,6 +98,11 @@ function App() {
           <Route path="/admin/finance/config" element={
             <RoleProtectedRoute allowedRoles={[UserRole.ROLE_SUPERADMIN]}>
               <AdminFinanceConfigPage />
+            </RoleProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <RoleProtectedRoute allowedRoles={[UserRole.ROLE_SUPERADMIN]}>
+              <AdminUsersPage />
             </RoleProtectedRoute>
           } />
           

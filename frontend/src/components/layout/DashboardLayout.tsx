@@ -77,9 +77,21 @@ const menuItems: MenuItem[] = [
     roles: [UserRole.ROLE_SUPERADMIN],
   },
   {
+    label: 'Usuários',
+    path: '/admin/users',
+    icon: Users,
+    roles: [UserRole.ROLE_SUPERADMIN],
+  },
+  {
     label: 'Escolas',
     path: '/group/schools',
     icon: School,
+    roles: [UserRole.ROLE_GROUP_MANAGER],
+  },
+  {
+    label: 'Usuários',
+    path: '/group/users',
+    icon: Users,
     roles: [UserRole.ROLE_GROUP_MANAGER],
   },
   {
@@ -116,6 +128,12 @@ const menuItems: MenuItem[] = [
     label: 'Financeiro',
     path: '/school/finance',
     icon: DollarSign,
+    roles: [UserRole.ROLE_SCHOOL_SECRETARY],
+  },
+  {
+    label: 'Usuários',
+    path: '/school/users',
+    icon: Users,
     roles: [UserRole.ROLE_SCHOOL_SECRETARY],
   },
   {
