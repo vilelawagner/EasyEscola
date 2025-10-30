@@ -17,6 +17,7 @@ import TeachersPage from './pages/school/Teachers'
 import ClassesPage from './pages/school/Classes'
 import SubjectsPage from './pages/school/Subjects'
 import EnrollmentsPage from './pages/school/Enrollments'
+import SchoolFinancePage from './pages/school/Finance'
 import TeacherDashboard from './pages/teacher/Dashboard'
 import TeacherMaterialsPage from './pages/teacher/Materials'
 import TeacherGradesPage from './pages/teacher/Grades'
@@ -145,6 +146,11 @@ function App() {
           <Route path="/enrollments" element={
             <RoleProtectedRoute allowedRoles={[UserRole.ROLE_SCHOOL_SECRETARY]}>
               <EnrollmentsPage />
+            </RoleProtectedRoute>
+          } />
+          <Route path="/school/finance" element={
+            <RoleProtectedRoute allowedRoles={[UserRole.ROLE_SCHOOL_SECRETARY]}>
+              <SchoolFinancePage />
             </RoleProtectedRoute>
           } />
           

@@ -67,7 +67,7 @@ export default function GroupSchoolsPage() {
       setEditingSchool(school);
       reset({
         name: school.name,
-        cnpj: school.cnpj,
+        cnpj: school.doc_cnpj || school.cnpj || '',
         phone: school.phone || '',
         email: school.email || '',
         address: school.address || '',
@@ -169,7 +169,7 @@ export default function GroupSchoolsPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {school.cnpj}
+                            {school.doc_cnpj || school.cnpj || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div>{school.phone || '-'}</div>

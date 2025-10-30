@@ -49,12 +49,17 @@ export interface School {
   id: number;
   group_id: number;
   name: string;
-  cnpj: string;
+  cnpj?: string;
+  doc_cnpj?: string;
   phone: string | null;
   email: string | null;
   address: string | null;
+  city?: string;
+  state?: string;
+  zip?: string;
   status: 'active' | 'inactive';
   created_at: string;
+  updated_at?: string;
 }
 
 // ==================== STUDENT ====================

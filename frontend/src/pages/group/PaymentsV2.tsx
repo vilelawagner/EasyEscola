@@ -46,12 +46,34 @@ export default function GroupPaymentsPage() {
     ? ((totalReceived / totalReceivable) * 100).toFixed(1) 
     : '0';
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'late':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'Pago';
+      case 'late':
+        return 'Atrasado';
+      default:
+        return 'Pendente';
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestão de Pagamentos</h1>
-          <p className="text-gray-600 mt-1">Consolidado financeiro dos alunos por escola</p>
+          <p className="text-gray-600 mt-1">Controle de mensalidades dos alunos</p>
         </div>
 
         {/* Cards de Métricas */}
@@ -199,16 +221,10 @@ export default function GroupPaymentsPage() {
                           Mês Ref.
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Total Alunos
+                          Valor
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Valor Total
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Recebido
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Pendente
+                          Vencimento
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Status
@@ -216,8 +232,8 @@ export default function GroupPaymentsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {paymentsData?.data.map((payment: any, index: number) => (
-                        <tr key={index}>
+                      {paymentsData?.data.map((payment) => (
+                        <tr key={payment.id}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <School size={16} className="text-blue-600" />
@@ -232,47 +248,28 @@ export default function GroupPaymentsPage() {
                               year: 'numeric',
                             })}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <div className="text-sm text-gray-900">
-                              {payment.payments_count || 0}
-                            </div>
-                            <div className="text-xs space-x-2">
-                              <span className="text-green-600">{payment.paid_count || 0} pagos</span>
-                              <span className="text-yellow-600">{payment.pending_count || 0} pend.</span>
-                              {(payment.late_count || 0) > 0 && (
-                                <span className="text-red-600">{payment.late_count} atras.</span>
-                              )}
-                            </div>
-                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="font-semibold text-gray-900">
-                              R$ {parseFloat(payment.total_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {parseFloat(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="font-semibold text-green-600">
-                              R$ {parseFloat(payment.total_received || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="font-semibold text-yellow-600">
-                              R$ {parseFloat(payment.total_pending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {(payment.late_count || 0) > 0 ? (
-                              <span className="px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                                {payment.late_count} Atrasado{payment.late_count > 1 ? 's' : ''}
-                              </span>
-                            ) : (payment.pending_count || 0) > 0 ? (
-                              <span className="px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-                                Em dia
-                              </span>
-                            ) : (
-                              <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                                Completo
-                              </span>
+                            {payment.method && (
+                              <div className="text-xs text-gray-500 capitalize">{payment.method}</div>
                             )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="text-gray-700">
+                              {new Date(payment.due_date).toLocaleDateString('pt-BR')}
+                            </div>
+                            {payment.paid_date && (
+                              <div className="text-xs text-green-600">
+                                Pago: {new Date(payment.paid_date).toLocaleDateString('pt-BR')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
+                              {getStatusLabel(payment.status)}
+                            </span>
                           </td>
                         </tr>
                       ))}

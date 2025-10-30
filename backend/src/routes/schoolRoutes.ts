@@ -53,4 +53,11 @@ router.get('/enrollments', SchoolController.listEnrollments);
 router.post('/enrollments', auditLog('create_enrollment'), SchoolController.createEnrollment);
 router.delete('/enrollments/:id', auditLog('delete_enrollment'), SchoolController.deleteEnrollment);
 
+// ==================== FINANCEIRO (STUDENT PAYMENTS) ====================
+router.get('/finance/summary', SchoolController.getFinanceSummary);
+router.get('/finance/payments', SchoolController.listStudentPayments);
+router.get('/finance/defaulters', SchoolController.listDefaulters);
+router.post('/finance/boleto', auditLog('generate_boleto'), SchoolController.generateBoleto);
+router.put('/finance/payments/:id/paid', auditLog('mark_payment_paid'), SchoolController.markPaymentAsPaid);
+
 export default router;

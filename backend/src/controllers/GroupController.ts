@@ -19,7 +19,7 @@ export const listSchools = async (req: AuthRequest, res: Response): Promise<void
   const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
   const { status, city, state } = req.query;
 
-  let query = db('schools').select('*');
+  let query = db('schools');
 
   // Aplica filtro de tenant
   applyTenantFilter(query, req);
@@ -35,11 +35,12 @@ export const listSchools = async (req: AuthRequest, res: Response): Promise<void
     query = query.where('state', state as string);
   }
 
-  // Count total
+  // Count total (sem select)
   const [{ total }] = await query.clone().count('* as total');
 
-  // Paginação
+  // Paginação com select
   const schools = await query
+    .select('*')
     .orderBy(sortBy || 'id', sortOrder)
     .limit(limit)
     .offset(getOffset(page, limit));
@@ -172,34 +173,54 @@ export const listPayments = async (req: AuthRequest, res: Response): Promise<voi
   const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
   const { schoolId, status, month } = req.query;
 
-  let query = db('payments')
-    .select('payments.*', 'schools.name as school_name')
-    .leftJoin('schools', 'payments.school_id', 'schools.id');
+  // Agora lista pagamentos de alunos agregados por escola
+  let query = db('student_payments');
 
   // Aplica filtro de tenant
-  applyTenantFilter(query, req, 'payments');
+  applyTenantFilter(query, req, 'student_payments');
 
   // Filtros adicionais
   if (schoolId) {
-    query = query.where('payments.school_id', schoolId as string);
+    query = query.where('student_payments.school_id', schoolId as string);
   }
   if (status) {
-    query = query.where('payments.status', status as string);
+    query = query.where('student_payments.status', status as string);
   }
   if (month) {
-    query = query.where('payments.reference_month', month as string);
+    query = query.where('student_payments.reference_month', month as string);
   }
 
-  // Count total
-  const [{ total }] = await query.clone().count('* as total');
+  // Agrupa por escola para mostrar resumo consolidado
+  const baseQuery = query.clone()
+    .select(
+      'student_payments.school_id',
+      'schools.name as school_name',
+      'student_payments.reference_month',
+      db.raw('COUNT(*) as payments_count'),
+      db.raw('SUM(CASE WHEN student_payments.status = "paid" THEN 1 ELSE 0 END) as paid_count'),
+      db.raw('SUM(CASE WHEN student_payments.status = "pending" THEN 1 ELSE 0 END) as pending_count'),
+      db.raw('SUM(CASE WHEN student_payments.status = "late" THEN 1 ELSE 0 END) as late_count'),
+      db.raw('SUM(student_payments.amount) as total_amount'),
+      db.raw('SUM(CASE WHEN student_payments.status = "paid" THEN student_payments.amount_paid ELSE 0 END) as total_received'),
+      db.raw('SUM(CASE WHEN student_payments.status != "paid" THEN student_payments.amount ELSE 0 END) as total_pending')
+    )
+    .leftJoin('schools', 'student_payments.school_id', 'schools.id')
+    .groupBy('student_payments.school_id', 'schools.name', 'student_payments.reference_month');
+
+  // Count total de grupos
+  const countResult = await db.raw(`
+    SELECT COUNT(*) as total 
+    FROM (${baseQuery.toQuery()}) as subquery
+  `);
+  const total = countResult[0][0].total;
 
   // Paginação
-  const payments = await query
-    .orderBy(`payments.${sortBy || 'id'}`, sortOrder)
+  const payments = await baseQuery
+    .orderBy(sortBy || 'student_payments.reference_month', sortOrder)
     .limit(limit)
     .offset(getOffset(page, limit));
 
-  res.json(createPaginatedResponse(payments, total as number, page, limit));
+  res.json(createPaginatedResponse(payments, Number(total), page, limit));
 };
 
 export const getPaymentsSummary = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -210,7 +231,8 @@ export const getPaymentsSummary = async (req: AuthRequest, res: Response): Promi
   const { month } = req.query;
   const filters = getTenantFilters(req);
 
-  let query = db('payments');
+  // Agora busca os pagamentos dos ALUNOS (student_payments) ao invés dos pagamentos das escolas
+  let query = db('student_payments');
 
   if (filters.groupId) {
     query = query.where('group_id', filters.groupId);
@@ -226,7 +248,7 @@ export const getPaymentsSummary = async (req: AuthRequest, res: Response): Promi
       db.raw('SUM(CASE WHEN status = "paid" THEN 1 ELSE 0 END) as paid_count'),
       db.raw('SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending_count'),
       db.raw('SUM(CASE WHEN status = "late" THEN 1 ELSE 0 END) as late_count'),
-      db.raw('SUM(CASE WHEN status = "paid" THEN amount ELSE 0 END) as total_paid'),
+      db.raw('SUM(CASE WHEN status = "paid" THEN amount_paid ELSE 0 END) as total_paid'),
       db.raw('SUM(CASE WHEN status != "paid" THEN amount ELSE 0 END) as total_pending')
     );
 

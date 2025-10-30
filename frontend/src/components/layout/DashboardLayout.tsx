@@ -113,6 +113,12 @@ const menuItems: MenuItem[] = [
     roles: [UserRole.ROLE_SCHOOL_SECRETARY],
   },
   {
+    label: 'Financeiro',
+    path: '/school/finance',
+    icon: DollarSign,
+    roles: [UserRole.ROLE_SCHOOL_SECRETARY],
+  },
+  {
     label: 'Materiais',
     path: '/materials',
     icon: FileText,

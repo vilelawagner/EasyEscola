@@ -81,7 +81,7 @@ export const listStudents = async (req: AuthRequest, res: Response): Promise<voi
   const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
   const { status, search } = req.query;
 
-  let query = db('students').select('*');
+  let query = db('students');
   applyTenantFilter(query, req);
 
   if (status) query = query.where('status', status as string);
@@ -96,6 +96,7 @@ export const listStudents = async (req: AuthRequest, res: Response): Promise<voi
 
   const [{ total }] = await query.clone().count('* as total');
   const students = await query
+    .select('*')
     .orderBy(sortBy || 'id', sortOrder)
     .limit(limit)
     .offset(getOffset(page, limit));
@@ -180,7 +181,7 @@ export const listTeachers = async (req: AuthRequest, res: Response): Promise<voi
   const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
   const { status, search } = req.query;
 
-  let query = db('teachers').select('*');
+  let query = db('teachers');
   applyTenantFilter(query, req);
 
   if (status) query = query.where('status', status as string);
@@ -194,6 +195,7 @@ export const listTeachers = async (req: AuthRequest, res: Response): Promise<voi
 
   const [{ total }] = await query.clone().count('* as total');
   const teachers = await query
+    .select('*')
     .orderBy(sortBy || 'id', sortOrder)
     .limit(limit)
     .offset(getOffset(page, limit));
@@ -253,11 +255,12 @@ export const listSubjects = async (req: AuthRequest, res: Response): Promise<voi
 
   const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
 
-  let query = db('subjects').select('*');
+  let query = db('subjects');
   applyTenantFilter(query, req);
 
   const [{ total }] = await query.clone().count('* as total');
   const subjects = await query
+    .select('*')
     .orderBy(sortBy || 'id', sortOrder)
     .limit(limit)
     .offset(getOffset(page, limit));
@@ -318,7 +321,7 @@ export const listClasses = async (req: AuthRequest, res: Response): Promise<void
   const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
   const { year, semester } = req.query;
 
-  let query = db('classes').select('*');
+  let query = db('classes');
   applyTenantFilter(query, req);
 
   if (year) query = query.where('year', year as string);
@@ -326,6 +329,7 @@ export const listClasses = async (req: AuthRequest, res: Response): Promise<void
 
   const [{ total }] = await query.clone().count('* as total');
   const classes = await query
+    .select('*')
     .orderBy(sortBy || 'id', sortOrder)
     .limit(limit)
     .offset(getOffset(page, limit));
@@ -513,10 +517,19 @@ export const listEnrollments = async (req: AuthRequest, res: Response): Promise<
       'enrollments.*',
       'students.ra',
       'students.name as student_name',
-      'students.email as student_email'
+      'students.email as student_email',
+      'classes.name as class_name'
     )
     .leftJoin('students', 'enrollments.student_id', 'students.id')
-    .where(filters);
+    .leftJoin('classes', 'enrollments.class_id', 'classes.id');
+
+  // Aplica filtros de tenant nas tabelas corretas
+  if (filters.groupId) {
+    query = query.where('enrollments.group_id', filters.groupId);
+  }
+  if (filters.schoolId) {
+    query = query.where('enrollments.school_id', filters.schoolId);
+  }
 
   if (classId) {
     query = query.where('enrollments.class_id', classId as string);
@@ -569,4 +582,200 @@ export const deleteEnrollment = async (req: AuthRequest, res: Response): Promise
 
   await db('enrollments').where({ id }).delete();
   res.json({ message: 'Matrícula removida com sucesso' });
+};
+
+// ==================== FINANCEIRO (STUDENT PAYMENTS) ====================
+
+export const getFinanceSummary = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const filters = getTenantFilters(req);
+  const { month } = req.query;
+
+  let query = db('student_payments');
+  if (filters.groupId) query = query.where('student_payments.group_id', filters.groupId);
+  if (filters.schoolId) query = query.where('student_payments.school_id', filters.schoolId);
+
+  if (month) {
+    query = query.where('reference_month', month as string);
+  }
+
+  // Total esperado
+  const [{ total_expected }] = await query.clone().sum('amount as total_expected');
+
+  // Total recebido
+  const [{ total_received }] = await query.clone()
+    .where('status', 'paid')
+    .sum('amount_paid as total_received');
+
+  // Total pendente
+  const [{ total_pending }] = await query.clone()
+    .where('status', 'pending')
+    .sum('amount as total_pending');
+
+  // Total atrasado
+  const [{ total_late }] = await query.clone()
+    .where('status', 'late')
+    .sum('amount as total_late');
+
+  // Quantidade de pagamentos atrasados
+  const [{ late_count }] = await query.clone()
+    .where('status', 'late')
+    .count('* as late_count');
+
+  // Quantidade de alunos inadimplentes
+  const [{ defaulters_count }] = await query.clone()
+    .where('status', 'late')
+    .countDistinct('student_id as defaulters_count');
+
+  res.json({
+    total_expected: parseFloat(total_expected || '0'),
+    total_received: parseFloat(total_received || '0'),
+    total_pending: parseFloat(total_pending || '0'),
+    total_late: parseFloat(total_late || '0'),
+    late_count: Number(late_count || 0),
+    defaulters_count: Number(defaulters_count || 0),
+  });
+};
+
+export const listStudentPayments = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { page, limit, sortBy, sortOrder } = getPaginationParams(req);
+  const { status, month, studentId } = req.query;
+  const filters = getTenantFilters(req);
+
+  let query = db('student_payments');
+  if (filters.groupId) query = query.where('student_payments.group_id', filters.groupId);
+  if (filters.schoolId) query = query.where('student_payments.school_id', filters.schoolId);
+
+  if (status) query = query.where('student_payments.status', status as string);
+  if (month) query = query.where('reference_month', month as string);
+  if (studentId) query = query.where('student_id', parseInt(studentId as string));
+
+  const [{ total }] = await query.clone().count('* as total');
+
+  const payments = await query
+    .select(
+      'student_payments.*',
+      'students.name as student_name',
+      'students.ra as student_ra'
+    )
+    .leftJoin('students', 'student_payments.student_id', 'students.id')
+    .orderBy(sortBy || 'student_payments.due_date', sortOrder)
+    .limit(limit)
+    .offset(getOffset(page, limit));
+
+  res.json(createPaginatedResponse(payments, Number(total), page, limit));
+};
+
+export const listDefaulters = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { page, limit } = getPaginationParams(req);
+  const filters = getTenantFilters(req);
+
+  let query = db('student_payments');
+  if (filters.groupId) query = query.where('student_payments.group_id', filters.groupId);
+  if (filters.schoolId) query = query.where('student_payments.school_id', filters.schoolId);
+
+  query = query.where('status', 'late');
+
+  const [{ total }] = await query.clone().countDistinct('student_id as total');
+
+  const defaulters = await query
+    .select(
+      'students.id as student_id',
+      'students.name as student_name',
+      'students.ra as student_ra',
+      'students.email as student_email',
+      db.raw('COUNT(*) as late_payments_count'),
+      db.raw('SUM(student_payments.amount) as total_debt')
+    )
+    .leftJoin('students', 'student_payments.student_id', 'students.id')
+    .groupBy('students.id', 'students.name', 'students.ra', 'students.email')
+    .orderBy('total_debt', 'desc')
+    .limit(limit)
+    .offset(getOffset(page, limit));
+
+  res.json(createPaginatedResponse(defaulters, Number(total), page, limit));
+};
+
+export const generateBoleto = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const filters = getTenantFilters(req);
+  const { studentId, referenceMonth, amount, dueDate, description } = req.body;
+
+  if (!studentId || !referenceMonth || !amount || !dueDate) {
+    throw new AppError('Dados obrigatórios: studentId, referenceMonth, amount, dueDate', 400);
+  }
+
+  // Verificar se já existe pagamento para este aluno neste mês
+  const existing = await db('student_payments')
+    .where({
+      school_id: filters.schoolId,
+      student_id: studentId,
+      reference_month: referenceMonth,
+    })
+    .first();
+
+  if (existing) {
+    throw new AppError('Já existe um pagamento para este aluno neste mês', 400);
+  }
+
+  // Gerar código de barras fictício (em produção, integrar com API de boletos)
+  const barcode = `${Math.random().toString().slice(2, 15)}${Date.now().toString().slice(-10)}`;
+  
+  // Gerar chave PIX fictícia (em produção, usar chave PIX real da escola)
+  const pixKey = `escola${filters.schoolId}@easyescola.com`;
+
+  const [id] = await db('student_payments').insert({
+    group_id: filters.groupId,
+    school_id: filters.schoolId,
+    student_id: studentId,
+    reference_month: referenceMonth,
+    barcode,
+    pix_key: pixKey,
+    due_date: dueDate,
+    amount,
+    description: description || `Mensalidade ${referenceMonth}`,
+    status: 'pending',
+  });
+
+  const payment = await db('student_payments').where({ id }).first();
+  res.status(201).json(payment);
+};
+
+export const markPaymentAsPaid = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) throw new AppError('Não autenticado', 401);
+
+  const { id } = req.params;
+  const { paymentMethod, amountPaid, paidDate, notes } = req.body;
+  const filters = getTenantFilters(req);
+
+  const payment = await db('student_payments')
+    .where('student_payments.id', id)
+    .where('student_payments.school_id', filters.schoolId)
+    .first();
+
+  if (!payment) throw new AppError('Pagamento não encontrado', 404);
+
+  if (payment.status === 'paid') {
+    throw new AppError('Pagamento já foi marcado como pago', 400);
+  }
+
+  await db('student_payments')
+    .where({ id })
+    .update({
+      status: 'paid',
+      payment_method: paymentMethod || 'boleto',
+      amount_paid: amountPaid || payment.amount,
+      paid_date: paidDate || new Date().toISOString().split('T')[0],
+      notes,
+      updated_at: db.fn.now(),
+    });
+
+  const updatedPayment = await db('student_payments').where({ id }).first();
+  res.json(updatedPayment);
 };

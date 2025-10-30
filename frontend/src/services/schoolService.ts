@@ -48,12 +48,18 @@ export const schoolService = {
   },
 
   create: async (schoolData: CreateSchoolData): Promise<School> => {
-    const { data } = await api.post('/group/schools', schoolData);
+    // Converte cnpj para doc_cnpj que o backend espera
+    const { cnpj, ...rest } = schoolData;
+    const payload = { ...rest, doc_cnpj: cnpj };
+    const { data } = await api.post('/group/schools', payload);
     return data;
   },
 
   update: async (id: number, schoolData: UpdateSchoolData): Promise<School> => {
-    const { data } = await api.put(`/group/schools/${id}`, schoolData);
+    // Converte cnpj para doc_cnpj que o backend espera
+    const { cnpj, ...rest } = schoolData;
+    const payload = cnpj ? { ...rest, doc_cnpj: cnpj } : rest;
+    const { data } = await api.put(`/group/schools/${id}`, payload);
     return data;
   },
 
